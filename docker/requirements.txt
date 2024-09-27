@@ -1,0 +1,13 @@
+anndata
+awswrangler
+leidenalg~=0.8.0
+manhole
+numpy>=1.22
+pandas~=1.2.4
+pyyaml~=5.4
+requests~=2.22.0
+scanpy
+scipy~=1.5.0
+awscli==1.18.105
+botocore==1.17.28
+muon
