@@ -80,8 +80,9 @@ def get_column_names(cell_count_file):
     return column_names_list
 
 
-def create_anndata(hdf5_store, var_names):
+def create_anndata(hdf5_store, var_names, tissue_type, uuids_df):
     data_set_dir = fspath(hdf5_store.parent.stem)
+    tissue_type = tissue_type if tissue_type else get_tissue_type(data_set_dir)
     store = pd.HDFStore(hdf5_store, 'r')
     key1 = '/total/channel/cell/expressions.ome.tiff/stitched/reg1'
     key2 = '/total/channel/cell/expr.ome.tiff/reg001'
@@ -90,25 +91,38 @@ def create_anndata(hdf5_store, var_names):
     elif key2 in store:
         matrix = store[key2]
     store.close()
-    adata = anndata.AnnData(X=matrix, dtype=matrix.dtypes)
+    # Create anndata object
+    adata = anndata.AnnData(X=matrix, dtype=np.float64)
     adata.var_names = var_names
     adata.obs['ID'] = adata.obs.index
     adata.obs['dataset'] = data_set_dir
     cell_ids_list = [
-        "-".join([data_set_dir, cell_id] for cell_id in adata.obs["ID"])
+        "-".join([data_set_dir, cell_id]) for cell_id in adata.obs["ID"]
     ]
     adata.obs["cell_id"] = pd.Series(
         cell_ids_list, index=adata.obs.index, dtype=str
     )
     adata.obs.set_index("cell_id", drop=True, inplace=True)
-    print(adata.obs.index)
     return adata
+
+def add_patient_metadata(obs, uuids_df):
+    uuids_df["uuid"] = uuids_df["uuid"].astype(str)
+    obs["dataset"] = obs["dataset"].astype(str)
+    uuids_dict = uuids_df.set_index('uuid').to_dict(orient='index')
+    for index, row in obs.iterrows():
+        dataset_value = row['dataset']
+        if dataset_value in uuids_dict:
+            for key, value in uuids_dict[dataset_value].items():
+                obs.at[index, key] = value
+    obs.drop(columns=['Unnamed: 0'])
+    return obs
 
 
 def main(data_dir, uuids_tsv, tissue):
     raw_output_file_name = f"{tissue}_raw.h5ad"
     uuids_df = pd.read_csv(uuids_tsv, sep="\t", dtype=str)
-    
+    uuids_list = uuids_df["uuid"].to_list()
+    hbmids_list = uuids_df["hubmap_id"].to_list()    
     hdf5_files_list = []
     cell_count_files_list = []
     
@@ -120,7 +134,21 @@ def main(data_dir, uuids_tsv, tissue):
             hdf5_files_list.extend(hdf5_files)
             cell_count_files_list.extend(cell_count_files)
     columns = get_column_names(cell_count_files[0])
-    adatas = [create_anndata(file, columns) for file in hdf5_files_list]
+    adatas = [create_anndata(file, columns, tissue, uuids_df) for file in hdf5_files_list]
+    adata = anndata.concat(adatas, join="outer")
+    obs_w_patient_info = add_patient_metadata(adata.obs, uuids_df)
+    adata.obs = obs_w_patient_info
+    creation_time = str(datetime.now())
+    data_product_uuid = str(uuid.uuid4())
+    total_cell_count = adata.obs.shape[0]
+    adata.uns["creation_data_time"] = creation_time
+    adata.uns["datasets"] = hbmids_list
+    adata.uns["uuid"] = data_product_uuid
+    print(adata.X)
+    print(adata.X.dtype)
+    adata.write(raw_output_file_name)
+    file_size = os.path.getsize(raw_output_file_name)
+    create_json(tissue, data_product_uuid, creation_time, uuids_list, hbmids_list, total_cell_count, file_size)    
 
 if __name__ == "__main__":
     p = ArgumentParser()
