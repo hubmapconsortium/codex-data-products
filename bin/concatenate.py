@@ -114,7 +114,7 @@ def add_patient_metadata(obs, uuids_df):
         if dataset_value in uuids_dict:
             for key, value in uuids_dict[dataset_value].items():
                 obs.at[index, key] = value
-    obs.drop(columns=['Unnamed: 0'])
+    del(obs["Unnamed: 0"])
     return obs
 
 

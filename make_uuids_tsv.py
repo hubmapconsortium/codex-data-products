@@ -123,6 +123,24 @@ def extract_donor_metadata(metadata):
         elif concept == "Race":
             donor_info["race"] = item.get('preferred_term')
 
+    for item in metadata.get('living_donor_data', []):
+        concept = item.get('grouping_concept_preferred_term')
+        value = item.get('data_value')
+        if concept == "Age":
+            donor_info["age"] = value
+        elif concept == "Sex":
+            donor_info["sex"] = item.get('preferred_term')
+        elif concept == "Height":
+            donor_info["height"] = value
+        elif concept == "Weight":
+            donor_info["weight"] = value
+        elif concept == "Body mass index":
+            donor_info["bmi"] = value
+        elif concept == "Cause of death":
+            donor_info["cause_of_death"] = item.get('preferred_term')
+        elif concept == "Race":
+            donor_info["race"] = item.get('preferred_term')
+
     return donor_info
 
 
@@ -145,7 +163,7 @@ def main(tissue_type: str):
     if key_for_tissue:
             output_file_name = f"{key_for_tissue[0].lower()}.tsv"
     else:
-        output_file_name = "atac.tsv"
+        output_file_name = "codex.tsv"
     print(result_df)
     result_df.to_csv(output_file_name, sep="\t")
 
