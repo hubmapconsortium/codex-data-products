@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Dict, Tuple
 
 import anndata
-import muon as mu
 import numpy as np
 import os
 import pandas as pd
@@ -122,25 +121,25 @@ def create_anndata(hdf5_store, var_names, tissue_type, uuids_df, cell_centers_fi
     adata.var_names = var_names
     adata.obs['ID'] = adata.obs.index
     adata.obs['dataset'] = data_set_dir
+    
+    # Set index for cell IDs
+    cell_ids_list = ["-".join([data_set_dir, cell_id]) for cell_id in adata.obs["ID"]]
+    adata.obs["cell_id"] = pd.Series(cell_ids_list, index=adata.obs.index, dtype=str)
+    adata.obs.set_index("cell_id", drop=True, inplace=True)
 
     cell_centers_df = pd.read_csv(cell_centers_file)
     cell_centers_df.rename(columns={'x': 'cell_center_x', 'y': 'cell_center_y'}, inplace=True)
-    # Ensure that only the cells present in both `adata` and the centers are included
-    common_cells = adata.obs["ID"].astype(str).isin(cell_centers_df['ID'].astype(str))
-    adata = adata[common_cells].copy()  # Filter adata to include only common cells
-        
-    # Merge x and y coordinates from cell centers to adata.obs
+    adata.obs['ID'] = adata.obs['ID'].astype(str)
+    cell_centers_df['ID'] = cell_centers_df['ID'].astype(str)
+    common_cells = adata.obs["ID"].isin(cell_centers_df['ID'])
+    adata = adata[common_cells].copy()
+
     adata.obs = adata.obs.merge(
         cell_centers_df[['ID', 'cell_center_x', 'cell_center_y']], 
         how='left', 
         left_on='ID', 
         right_on='ID'
     )
-    
-    # Set index for cell IDs
-    cell_ids_list = ["-".join([data_set_dir, cell_id]) for cell_id in adata.obs["ID"]]
-    adata.obs["cell_id"] = pd.Series(cell_ids_list, index=adata.obs.index, dtype=str)
-    adata.obs.set_index("cell_id", drop=True, inplace=True)
     
     return adata
 
