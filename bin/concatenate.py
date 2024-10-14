@@ -106,19 +106,19 @@ def get_column_names(cell_count_file):
     return column_names_list
 
 
-def create_anndata(hdf5_store, var_names, tissue_type, uuids_df, cell_centers_file=None):
+def create_anndata(hdf5_store, tissue_type, uuids_df, cell_centers_file, cell_count_file):
     data_set_dir = fspath(hdf5_store.parent.stem)
     tissue_type = tissue_type if tissue_type else get_tissue_type(data_set_dir)
     store = pd.HDFStore(hdf5_store, 'r')
     key1 = '/total/channel/cell/expressions.ome.tiff/stitched/reg1'
     key2 = '/total/channel/cell/expr.ome.tiff/reg001'
-    
+    var_names = get_column_names(cell_count_file)
     if key1 in store:
         matrix = store[key1]
-        mean_layer_matrix = '/meanAll/channel/cell/expressions.ome.tiff/stitched/reg1'
+        mean_layer_matrix = store['/meanAll/channel/cell/expressions.ome.tiff/stitched/reg1']
     elif key2 in store:
         matrix = store[key2]
-        mean_layer_matrix = '/meanAll/channel/cell/expr.ome.tiff/reg001'
+        mean_layer_matrix = store['/meanAll/channel/cell/expr.ome.tiff/reg001']
     store.close()
     
     adata = anndata.AnnData(X=matrix, dtype=np.float64)
@@ -160,11 +160,16 @@ def load_adjacency_matrix_and_labels(adjacency_file, label_file, adata):
     adjacency_matrix = mmread(adjacency_file).tocsc()
     labels = pd.read_csv(label_file, header=None, names=["cell_id"], delim_whitespace=True)
 
-    adata_cell_ids = adata.obs["ID"].astype(str).to_list()
-    filtered_labels = labels[labels["cell_id"].astype(str).isin(adata_cell_ids)]
-    
-    filtered_indices = filtered_labels.index.values
-    filtered_matrix = adjacency_matrix[filtered_indices, :][:, filtered_indices]
+    adata_cell_ids = adata.obs["ID"].astype(int).to_list()
+    filtered_labels = labels[labels["cell_id"].isin(adata_cell_ids)]
+    filtered_cell_ids = filtered_labels["cell_id"].values
+
+    label_to_index_map = pd.Series(labels.index.values, index=labels["cell_id"].astype(int))
+    filtered_indices = label_to_index_map[filtered_cell_ids].values
+
+    # Adjust indices to fit the zero-based indexing
+    adjusted_indices = filtered_indices - 1
+    filtered_matrix = adjacency_matrix[adjusted_indices, :][:, adjusted_indices]
     return filtered_matrix.tocoo()
 
 
@@ -194,15 +199,13 @@ def main(data_dir, uuids_tsv, tissue):
             adjacency_matrix_files_list.extend(adjacency_matrix_files)
             adjacency_matrix_labels_files_list.extend(adjacency_matrix_labels_files)
             cell_centers_files_list.extend(cell_centers_files)
-
-    columns = get_column_names(cell_count_files[0])
     
     # Create the AnnData objects and process adjacency matrices
     adatas = []
     filtered_adjacency_matrices = []
     
-    for hdf5_file, cell_centers_file, adjacency_file, label_file in zip(hdf5_files_list, cell_centers_files_list, adjacency_matrix_files_list, adjacency_matrix_labels_files_list):
-        adata = create_anndata(hdf5_file, columns, tissue, uuids_df, cell_centers_file)
+    for hdf5_file, cell_centers_file, adjacency_file, label_file, cell_count_file in zip(hdf5_files_list, cell_centers_files_list, adjacency_matrix_files_list, adjacency_matrix_labels_files_list, cell_count_files_list):
+        adata = create_anndata(hdf5_file, tissue, uuids_df, cell_centers_file, cell_count_file)
         adatas.append(adata)
         
         # Load and filter the corresponding adjacency matrix

@@ -80,7 +80,7 @@ def main(data_directory: Path, uuids_file: Path, tissue: str):
         )  # Create UUID-specific directory
         input_directory = get_input_directory(data_directory, uuid)
         input_files = find_file_pairs(input_directory)
-        if input_files == (None, None):
+        if input_files == (None, None, None, None, None):
             print("No input files in: ", input_directory)
             continue
         print("Input directory:", input_directory)
