@@ -126,20 +126,12 @@ def create_anndata(hdf5_store, var_names, tissue_type, uuids_df, cell_centers_fi
     cell_ids_list = ["-".join([data_set_dir, cell_id]) for cell_id in adata.obs["ID"]]
     adata.obs["cell_id"] = pd.Series(cell_ids_list, index=adata.obs.index, dtype=str)
     adata.obs.set_index("cell_id", drop=True, inplace=True)
-
+    
+    # Read cell centers
     cell_centers_df = pd.read_csv(cell_centers_file)
-    cell_centers_df.rename(columns={'x': 'cell_center_x', 'y': 'cell_center_y'}, inplace=True)
-    adata.obs['ID'] = adata.obs['ID'].astype(str)
-    cell_centers_df['ID'] = cell_centers_df['ID'].astype(str)
-    common_cells = adata.obs["ID"].isin(cell_centers_df['ID'])
-    adata = adata[common_cells].copy()
-
-    adata.obs = adata.obs.merge(
-        cell_centers_df[['ID', 'cell_center_x', 'cell_center_y']], 
-        how='left', 
-        left_on='ID', 
-        right_on='ID'
-    )
+    
+    # Create the cell centers matrix and store it in .obsm
+    adata.obsm['centers'] = cell_centers_df.loc[cell_centers_df['ID'].astype(str).isin(adata.obs['ID'].astype(str)), ['x', 'y']].to_numpy()
     
     return adata
 
