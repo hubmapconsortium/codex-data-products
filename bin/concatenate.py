@@ -115,8 +115,10 @@ def create_anndata(hdf5_store, var_names, tissue_type, uuids_df, cell_centers_fi
     
     if key1 in store:
         matrix = store[key1]
+        mean_layer_matrix = '/meanAll/channel/cell/expressions.ome.tiff/stitched/reg1'
     elif key2 in store:
         matrix = store[key2]
+        mean_layer_matrix = '/meanAll/channel/cell/expr.ome.tiff/reg001'
     store.close()
     
     adata = anndata.AnnData(X=matrix, dtype=np.float64)
@@ -129,12 +131,15 @@ def create_anndata(hdf5_store, var_names, tissue_type, uuids_df, cell_centers_fi
     adata.obs["cell_id"] = pd.Series(cell_ids_list, index=adata.obs.index, dtype=str)
     adata.obs.set_index("cell_id", drop=True, inplace=True)
     
+    # Add the mean layer
+    adata.layers['mean_expression'] = mean_layer_matrix
+
     # Read cell centers
     cell_centers_df = pd.read_csv(cell_centers_file)
     
     # Create the cell centers matrix and store it in .obsm
     adata.obsm['centers'] = cell_centers_df.loc[cell_centers_df['ID'].astype(str).isin(adata.obs['ID'].astype(str)), ['x', 'y']].to_numpy()
-    print("adata shape:", adata.shape)
+
     return adata
 
 
@@ -154,10 +159,9 @@ def add_patient_metadata(obs, uuids_df):
 def load_adjacency_matrix_and_labels(adjacency_file, label_file, adata):
     adjacency_matrix = mmread(adjacency_file).tocsc()
     labels = pd.read_csv(label_file, header=None, names=["cell_id"], delim_whitespace=True)
-    print("labels shape:", labels.shape)
+
     adata_cell_ids = adata.obs["ID"].astype(str).to_list()
     filtered_labels = labels[labels["cell_id"].astype(str).isin(adata_cell_ids)]
-    print("filtered labels", filtered_labels)
     
     filtered_indices = filtered_labels.index.values
     filtered_matrix = adjacency_matrix[filtered_indices, :][:, filtered_indices]
