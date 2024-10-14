@@ -6,6 +6,8 @@ from collections import defaultdict
 from datetime import datetime
 from os import fspath, walk, listdir
 from pathlib import Path
+from scipy.io import mmread
+from scipy.sparse import coo_array, block_diag, load_npz
 from typing import Dict, Tuple
 
 import anndata
@@ -132,7 +134,7 @@ def create_anndata(hdf5_store, var_names, tissue_type, uuids_df, cell_centers_fi
     
     # Create the cell centers matrix and store it in .obsm
     adata.obsm['centers'] = cell_centers_df.loc[cell_centers_df['ID'].astype(str).isin(adata.obs['ID'].astype(str)), ['x', 'y']].to_numpy()
-    
+    print("adata shape:", adata.shape)
     return adata
 
 
@@ -147,6 +149,25 @@ def add_patient_metadata(obs, uuids_df):
                 obs.at[index, key] = value
     del(obs["Unnamed: 0"])
     return obs
+
+
+def load_adjacency_matrix_and_labels(adjacency_file, label_file, adata):
+    adjacency_matrix = mmread(adjacency_file).tocsc()
+    labels = pd.read_csv(label_file, header=None, names=["cell_id"], delim_whitespace=True)
+    print("labels shape:", labels.shape)
+    adata_cell_ids = adata.obs["ID"].astype(str).to_list()
+    filtered_labels = labels[labels["cell_id"].astype(str).isin(adata_cell_ids)]
+    print("filtered labels", filtered_labels)
+    
+    filtered_indices = filtered_labels.index.values
+    filtered_matrix = adjacency_matrix[filtered_indices, :][:, filtered_indices]
+    return filtered_matrix.tocoo()
+
+
+def create_block_diag_adjacency_matrices(adjacency_matrices):
+    block_diag_matrix = block_diag(adjacency_matrices, format='coo')
+    
+    return block_diag_matrix.tocsr()
 
 
 def main(data_dir, uuids_tsv, tissue):
@@ -172,32 +193,39 @@ def main(data_dir, uuids_tsv, tissue):
 
     columns = get_column_names(cell_count_files[0])
     
-    # Create the AnnData objects
-    adatas = [
-        create_anndata(hdf5_file, columns, tissue, uuids_df, cell_centers_file) 
-        for hdf5_file, cell_centers_file in zip(hdf5_files_list, cell_centers_files_list)
-    ]
+    # Create the AnnData objects and process adjacency matrices
+    adatas = []
+    filtered_adjacency_matrices = []
     
-    adata = anndata.concat(adatas, join="outer")
-    
-    # Add patient metadata
-    obs_w_patient_info = add_patient_metadata(adata.obs, uuids_df)
-    adata.obs = obs_w_patient_info
+    for hdf5_file, cell_centers_file, adjacency_file, label_file in zip(hdf5_files_list, cell_centers_files_list, adjacency_matrix_files_list, adjacency_matrix_labels_files_list):
+        adata = create_anndata(hdf5_file, columns, tissue, uuids_df, cell_centers_file)
+        adatas.append(adata)
+        
+        # Load and filter the corresponding adjacency matrix
+        filtered_matrix = load_adjacency_matrix_and_labels(adjacency_file, label_file, adata)
+        filtered_adjacency_matrices.append(filtered_matrix)
 
-    # Generate metadata and write AnnData
+    # Concatenate all AnnData objects into one
+    combined_adata = anndata.concat(adatas, join="outer")
+    combined_adjacency_matrix = create_block_diag_adjacency_matrices(filtered_adjacency_matrices)
+    combined_adata.obsp["adjacency_matrix"] = combined_adjacency_matrix
+
+    # Add patient metadata to obs
+    obs_w_patient_info = add_patient_metadata(combined_adata.obs, uuids_df)
+    combined_adata.obs = obs_w_patient_info
+
+    # Generate data product metadata and write AnnData
     creation_time = str(datetime.now())
     data_product_uuid = str(uuid.uuid4())
-    total_cell_count = adata.obs.shape[0]
-    adata.uns["creation_data_time"] = creation_time
-    adata.uns["datasets"] = hbmids_list
-    adata.uns["uuid"] = data_product_uuid
-    print(adata.X)
-    print(adata.X.dtype)
-    adata.write(raw_output_file_name)
-    
-    # Save file metadata
+    total_cell_count = combined_adata.obs.shape[0]
+    combined_adata.uns["creation_data_time"] = creation_time
+    combined_adata.uns["datasets"] = hbmids_list
+    combined_adata.uns["uuid"] = data_product_uuid
+    combined_adata.write(raw_output_file_name)
+
+    # Save data product metadata
     file_size = os.path.getsize(raw_output_file_name)
-    create_json(tissue, data_product_uuid, creation_time, uuids_list, hbmids_list, total_cell_count, file_size)    
+    create_json(tissue, data_product_uuid, creation_time, uuids_list, hbmids_list, total_cell_count, file_size)
 
 
 if __name__ == "__main__":
