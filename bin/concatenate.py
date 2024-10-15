@@ -2,12 +2,11 @@
 
 import json
 from argparse import ArgumentParser
-from collections import defaultdict
 from datetime import datetime
 from os import fspath, walk, listdir
 from pathlib import Path
 from scipy.io import mmread
-from scipy.sparse import coo_array, block_diag, load_npz
+from scipy.sparse import block_diag
 from typing import Dict, Tuple
 
 import anndata
@@ -17,6 +16,33 @@ import pandas as pd
 import requests
 import uuid
 import yaml
+
+antibodies_dict = {
+    "BCL-2": "BLC2",
+    "Collagen IV": ["CollIV", "CollagenIV", "collagen IV"],
+    "Cytokeratin": "cytokeratin",
+    "eCAD": ["E-CAD", "ECAD"],
+    "HLA-DR": "HLADR",
+    "Hoechst1": "HOECHST1",
+    "PanCK":  "panCK",
+    "Podoplanin": ["Podoplan", "podoplanin", "PDPN"],
+    "Synaptophysin": ["Synapt", "Synapto"],
+    "aDefensin 5": ["aDef5", "aDefensin5"],
+    "MUC-1/EMA": "MUC1",
+    "NKG2D (CD314)": "NKG2D",
+    "a-SMA": ["SMActin", "aSMA"],
+    "MUC-2": "MUC2",
+    "Foxp3": "FoxP3",
+    }
+
+
+def find_antibody_key(value):
+    for key, val in antibodies_dict.items():
+        if isinstance(val, str) and val == value:
+            return key
+        elif isinstance(val, list) and value in val:
+            return key
+    return value
 
 
 def get_tissue_type(dataset: str) -> str:
@@ -113,6 +139,7 @@ def create_anndata(hdf5_store, tissue_type, uuids_df, cell_centers_file, cell_co
     key1 = '/total/channel/cell/expressions.ome.tiff/stitched/reg1'
     key2 = '/total/channel/cell/expr.ome.tiff/reg001'
     var_names = get_column_names(cell_count_file)
+
     if key1 in store:
         matrix = store[key1]
         mean_layer_matrix = store['/meanAll/channel/cell/expressions.ome.tiff/stitched/reg1']
@@ -121,6 +148,9 @@ def create_anndata(hdf5_store, tissue_type, uuids_df, cell_centers_file, cell_co
         mean_layer_matrix = store['/meanAll/channel/cell/expr.ome.tiff/reg001']
     store.close()
     
+    # Replace column names with antibody names using the dictionary
+    var_names = [find_antibody_key(var, antibodies_dict) for var in var_names]
+
     adata = anndata.AnnData(X=matrix, dtype=np.float64)
     adata.var_names = var_names
     adata.obs['ID'] = adata.obs.index
