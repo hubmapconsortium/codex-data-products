@@ -20,10 +20,37 @@ def find_files(directory, patterns):
 
 def find_file_pairs(directory):
     hdf5_pattern = ["out.hdf5"]
-    cell_count_pattern = ["reg1_stitched_expressions.ome.tiff-cell_channel_total.csv", "reg001_expr.ome.tiff-cell_channel_total.csv"]
+    
+    cell_count_pattern = [
+        "reg1_stitched_expressions.ome.tiff-cell_channel_total.csv", 
+        "reg001_expr.ome.tiff-cell_channel_total.csv"
+    ]
+    adjacency_matrix_pattern = [
+        "reg1_stitched_expressions.ome.tiff_AdjacencyMatrix.mtx", 
+        "reg001_expr.ome.tiff_AdjacencyMatrix.mtx"
+    ]
+    adjacency_matrix_labels_pattern = [
+        "reg1_stitched_expressions.ome.tiff_AdjacencyMatrixRowColLabels.txt", 
+        "reg001_expr.ome.tiff_AdjacencyMatrixRowColLabels.txt"
+    ]
+    cell_centers_pattern = [
+        "reg1_stitched_expressions.ome.tiff-cell_centers.csv", 
+        "reg001_expr.ome.tiff-cell_centers.csv"
+    ]
+
     hdf5_file = find_files(directory, hdf5_pattern)
     cell_count_file = find_files(directory, cell_count_pattern)
-    return hdf5_file, cell_count_file
+    adjacency_matrix_file = find_files(directory, adjacency_matrix_pattern)
+    adjacency_matrix_labels_file = find_files(directory, adjacency_matrix_labels_pattern)
+    cell_centers_file = find_files(directory, cell_centers_pattern)
+    
+    return (
+        hdf5_file, 
+        cell_count_file, 
+        adjacency_matrix_file, 
+        adjacency_matrix_labels_file, 
+        cell_centers_file
+    )
 
 
 def get_input_directory(data_directory, uuid):
@@ -53,7 +80,7 @@ def main(data_directory: Path, uuids_file: Path, tissue: str):
         )  # Create UUID-specific directory
         input_directory = get_input_directory(data_directory, uuid)
         input_files = find_file_pairs(input_directory)
-        if input_files == (None, None):
+        if input_files == (None, None, None, None, None):
             print("No input files in: ", input_directory)
             continue
         print("Input directory:", input_directory)

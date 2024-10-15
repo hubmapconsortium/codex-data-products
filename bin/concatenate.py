@@ -6,10 +6,11 @@ from collections import defaultdict
 from datetime import datetime
 from os import fspath, walk, listdir
 from pathlib import Path
+from scipy.io import mmread
+from scipy.sparse import coo_array, block_diag, load_npz
 from typing import Dict, Tuple
 
 import anndata
-import muon as mu
 import numpy as np
 import os
 import pandas as pd
@@ -45,14 +46,39 @@ def find_files(directory, patterns):
                     matched_files.append(filepath)
     return matched_files
 
+
 def find_files_by_type(directory):
     hdf5_patterns = ["out.hdf5"]
-    cell_count_patterns = ["reg1_stitched_expressions.ome.tiff-cell_channel_total.csv", "reg001_expr.ome.tiff-cell_channel_total.csv"]
-    
+    cell_count_patterns = [
+        "reg1_stitched_expressions.ome.tiff-cell_channel_total.csv", 
+        "reg001_expr.ome.tiff-cell_channel_total.csv"
+    ]
+    adjacency_matrix_patterns = [
+        "reg1_stitched_expressions.ome.tiff_AdjacencyMatrix.mtx", 
+        "reg001_expr.ome.tiff_AdjacencyMatrix.mtx"
+    ]
+    adjacency_matrix_labels_patterns = [
+        "reg1_stitched_expressions.ome.tiff_AdjacencyMatrixRowColLabels.txt", 
+        "reg001_expr.ome.tiff_AdjacencyMatrixRowColLabels.txt"
+    ]
+    cell_centers_patterns = [
+        "reg1_stitched_expressions.ome.tiff-cell_centers.csv", 
+        "reg001_expr.ome.tiff-cell_centers.csv"
+    ]
+
     hdf5_files = find_files(directory, hdf5_patterns)
     cell_count_files = find_files(directory, cell_count_patterns)
+    adjacency_matrix_files = find_files(directory, adjacency_matrix_patterns)
+    adjacency_matrix_labels_files = find_files(directory, adjacency_matrix_labels_patterns)
+    cell_centers_files = find_files(directory, cell_centers_patterns)
     
-    return hdf5_files, cell_count_files
+    return (
+        hdf5_files, 
+        cell_count_files, 
+        adjacency_matrix_files, 
+        adjacency_matrix_labels_files, 
+        cell_centers_files
+    )
 
 
 def create_json(tissue, data_product_uuid, creation_time, uuids, hbmids, cell_count, file_size):
@@ -80,30 +106,42 @@ def get_column_names(cell_count_file):
     return column_names_list
 
 
-def create_anndata(hdf5_store, var_names, tissue_type, uuids_df):
+def create_anndata(hdf5_store, tissue_type, uuids_df, cell_centers_file, cell_count_file):
     data_set_dir = fspath(hdf5_store.parent.stem)
     tissue_type = tissue_type if tissue_type else get_tissue_type(data_set_dir)
     store = pd.HDFStore(hdf5_store, 'r')
     key1 = '/total/channel/cell/expressions.ome.tiff/stitched/reg1'
     key2 = '/total/channel/cell/expr.ome.tiff/reg001'
+    var_names = get_column_names(cell_count_file)
     if key1 in store:
         matrix = store[key1]
+        mean_layer_matrix = store['/meanAll/channel/cell/expressions.ome.tiff/stitched/reg1']
     elif key2 in store:
         matrix = store[key2]
+        mean_layer_matrix = store['/meanAll/channel/cell/expr.ome.tiff/reg001']
     store.close()
-    # Create anndata object
+    
     adata = anndata.AnnData(X=matrix, dtype=np.float64)
     adata.var_names = var_names
     adata.obs['ID'] = adata.obs.index
     adata.obs['dataset'] = data_set_dir
-    cell_ids_list = [
-        "-".join([data_set_dir, cell_id]) for cell_id in adata.obs["ID"]
-    ]
-    adata.obs["cell_id"] = pd.Series(
-        cell_ids_list, index=adata.obs.index, dtype=str
-    )
+    
+    # Set index for cell IDs
+    cell_ids_list = ["-".join([data_set_dir, cell_id]) for cell_id in adata.obs["ID"]]
+    adata.obs["cell_id"] = pd.Series(cell_ids_list, index=adata.obs.index, dtype=str)
     adata.obs.set_index("cell_id", drop=True, inplace=True)
+    
+    # Add the mean layer
+    adata.layers['mean_expression'] = mean_layer_matrix
+
+    # Read cell centers
+    cell_centers_df = pd.read_csv(cell_centers_file)
+    
+    # Create the cell centers matrix and store it in .obsm
+    adata.obsm['centers'] = cell_centers_df.loc[cell_centers_df['ID'].astype(str).isin(adata.obs['ID'].astype(str)), ['x', 'y']].to_numpy()
+
     return adata
+
 
 def add_patient_metadata(obs, uuids_df):
     uuids_df["uuid"] = uuids_df["uuid"].astype(str)
@@ -118,6 +156,29 @@ def add_patient_metadata(obs, uuids_df):
     return obs
 
 
+def load_adjacency_matrix_and_labels(adjacency_file, label_file, adata):
+    adjacency_matrix = mmread(adjacency_file).tocsc()
+    labels = pd.read_csv(label_file, header=None, names=["cell_id"], delim_whitespace=True)
+
+    adata_cell_ids = adata.obs["ID"].astype(int).to_list()
+    filtered_labels = labels[labels["cell_id"].isin(adata_cell_ids)]
+    filtered_cell_ids = filtered_labels["cell_id"].values
+
+    label_to_index_map = pd.Series(labels.index.values, index=labels["cell_id"].astype(int))
+    filtered_indices = label_to_index_map[filtered_cell_ids].values
+
+    # Adjust indices to fit the zero-based indexing
+    adjusted_indices = filtered_indices - 1
+    filtered_matrix = adjacency_matrix[adjusted_indices, :][:, adjusted_indices]
+    return filtered_matrix.tocoo()
+
+
+def create_block_diag_adjacency_matrices(adjacency_matrices):
+    block_diag_matrix = block_diag(adjacency_matrices, format='coo')
+    
+    return block_diag_matrix.tocsr()
+
+
 def main(data_dir, uuids_tsv, tissue):
     raw_output_file_name = f"{tissue}_raw.h5ad"
     uuids_df = pd.read_csv(uuids_tsv, sep="\t", dtype=str)
@@ -125,30 +186,54 @@ def main(data_dir, uuids_tsv, tissue):
     hbmids_list = uuids_df["hubmap_id"].to_list()    
     hdf5_files_list = []
     cell_count_files_list = []
-    
+    adjacency_matrix_files_list = []
+    adjacency_matrix_labels_files_list = []
+    cell_centers_files_list = []    
     directories = [data_dir / Path(uuid) for uuid in uuids_df["uuid"]]
     
     for directory in directories:
         if len(listdir(directory)) > 1:
-            hdf5_files, cell_count_files = find_files_by_type(directory)
+            hdf5_files, cell_count_files, adjacency_matrix_files, adjacency_matrix_labels_files, cell_centers_files = find_files_by_type(directory)
             hdf5_files_list.extend(hdf5_files)
             cell_count_files_list.extend(cell_count_files)
-    columns = get_column_names(cell_count_files[0])
-    adatas = [create_anndata(file, columns, tissue, uuids_df) for file in hdf5_files_list]
-    adata = anndata.concat(adatas, join="outer")
-    obs_w_patient_info = add_patient_metadata(adata.obs, uuids_df)
-    adata.obs = obs_w_patient_info
+            adjacency_matrix_files_list.extend(adjacency_matrix_files)
+            adjacency_matrix_labels_files_list.extend(adjacency_matrix_labels_files)
+            cell_centers_files_list.extend(cell_centers_files)
+    
+    # Create the AnnData objects and process adjacency matrices
+    adatas = []
+    filtered_adjacency_matrices = []
+    
+    for hdf5_file, cell_centers_file, adjacency_file, label_file, cell_count_file in zip(hdf5_files_list, cell_centers_files_list, adjacency_matrix_files_list, adjacency_matrix_labels_files_list, cell_count_files_list):
+        adata = create_anndata(hdf5_file, tissue, uuids_df, cell_centers_file, cell_count_file)
+        adatas.append(adata)
+        
+        # Load and filter the corresponding adjacency matrix
+        filtered_matrix = load_adjacency_matrix_and_labels(adjacency_file, label_file, adata)
+        filtered_adjacency_matrices.append(filtered_matrix)
+
+    # Concatenate all AnnData objects into one
+    combined_adata = anndata.concat(adatas, join="outer")
+    combined_adjacency_matrix = create_block_diag_adjacency_matrices(filtered_adjacency_matrices)
+    combined_adata.obsp["adjacency_matrix"] = combined_adjacency_matrix
+
+    # Add patient metadata to obs
+    obs_w_patient_info = add_patient_metadata(combined_adata.obs, uuids_df)
+    combined_adata.obs = obs_w_patient_info
+
+    # Generate data product metadata and write AnnData
     creation_time = str(datetime.now())
     data_product_uuid = str(uuid.uuid4())
-    total_cell_count = adata.obs.shape[0]
-    adata.uns["creation_data_time"] = creation_time
-    adata.uns["datasets"] = hbmids_list
-    adata.uns["uuid"] = data_product_uuid
-    print(adata.X)
-    print(adata.X.dtype)
-    adata.write(raw_output_file_name)
+    total_cell_count = combined_adata.obs.shape[0]
+    combined_adata.uns["creation_data_time"] = creation_time
+    combined_adata.uns["datasets"] = hbmids_list
+    combined_adata.uns["uuid"] = data_product_uuid
+    combined_adata.write(raw_output_file_name)
+
+    # Save data product metadata
     file_size = os.path.getsize(raw_output_file_name)
-    create_json(tissue, data_product_uuid, creation_time, uuids_list, hbmids_list, total_cell_count, file_size)    
+    create_json(tissue, data_product_uuid, creation_time, uuids_list, hbmids_list, total_cell_count, file_size)
+
 
 if __name__ == "__main__":
     p = ArgumentParser()
