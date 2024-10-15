@@ -18,7 +18,7 @@ import uuid
 import yaml
 
 antibodies_dict = {
-    "BCL-2": "BLC2",
+    "BCL-2": "BCL2",
     "Collagen IV": ["CollIV", "CollagenIV", "collagen IV"],
     "Cytokeratin": "cytokeratin",
     "eCAD": ["E-CAD", "ECAD"],
