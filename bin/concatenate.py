@@ -112,7 +112,7 @@ def create_json(tissue, data_product_uuid, creation_time, uuids, hbmids, cell_co
     metadata = {
         "Data Product UUID": data_product_uuid,
         "Tissue": convert_tissue_code(tissue),
-        "Assay": "atac",
+        "Assay": "CODEX",
         "Raw URL": bucket_url + f"{tissue}.h5mu",
         "Creation Time": creation_time,
         "Dataset UUIDs": uuids,
@@ -149,7 +149,7 @@ def create_anndata(hdf5_store, tissue_type, uuids_df, cell_centers_file, cell_co
     store.close()
     
     # Replace column names with antibody names using the dictionary
-    var_names = [find_antibody_key(var, antibodies_dict) for var in var_names]
+    var_names = [find_antibody_key(var) for var in var_names]
 
     adata = anndata.AnnData(X=matrix, dtype=np.float64)
     adata.var_names = var_names
