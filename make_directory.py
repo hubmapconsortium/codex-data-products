@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+from antibodies_tsv_util import find_antibodies_meta
 from argparse import ArgumentParser
 from os import fspath, walk
 from pathlib import Path
@@ -64,32 +65,55 @@ def get_input_directory(data_directory, uuid):
                 consortium_subdir = subdir / uuid
                 if consortium_subdir.exists():
                     return consortium_subdir
+                
+
+def copy_file(file, files_directory):
+    check_call(
+        f"cp {fspath(file)} {files_directory}/{file.name}",
+        shell=True,
+    )
+
+
+def find_parent_file(input_directory, files_directory):
+    antibodies_file = find_antibodies_meta(input_directory)
+    if antibodies_file:
+        print(f"Antibodies TSV: {antibodies_file}")
+        copy_file(antibodies_file, files_directory)
+    else:
+        print(f"No antibodies TSV found in {input_directory}")
+
+
+def find_processed_files(uuids_df, files_base_directory, data_directory):
+    for _, row in uuids_df.iterrows():
+        uuid = row['uuid']
+        immediate_descendant_ids = row['immediate_descendant_ids']
+
+        files_directory = files_base_directory / uuid
+        files_directory.mkdir(parents=True, exist_ok=True)
+
+        input_directory = get_input_directory(data_directory, uuid)
+
+        if pd.notna(immediate_descendant_ids):  # If there are immediate descendants
+            find_parent_file(input_directory, files_directory)
+        else:
+            input_files = find_file_pairs(input_directory)
+            if input_files == (None, None, None, None, None):
+                print("No input files in: ", input_directory)
+                continue
+            print("Input directory:", input_directory)
+            print("Input files:", input_files)
+            for input_file in input_files:
+                copy_file(input_file, files_directory)
 
 
 def main(data_directory: Path, uuids_file: Path, tissue: str):
-    uuids = pd.read_csv(uuids_file, sep="\t")["uuid"]
-    uuids = uuids.dropna()
-    h5ads_base_directory = Path(f"{tissue}_files")
-    h5ads_base_directory.mkdir(
-        exist_ok=True
-    )  # Create h5ads directory if it doesn't exist
-    for uuid in uuids:
-        h5ads_directory = h5ads_base_directory / uuid
-        h5ads_directory.mkdir(
-            parents=True, exist_ok=True
-        )  # Create UUID-specific directory
-        input_directory = get_input_directory(data_directory, uuid)
-        input_files = find_file_pairs(input_directory)
-        if input_files == (None, None, None, None, None):
-            print("No input files in: ", input_directory)
-            continue
-        print("Input directory:", input_directory)
-        print("Input files:", input_files)
-        for input_file in input_files:
-            check_call(
-                f"cp {fspath(input_file)} {h5ads_directory}/{input_file.name}",
-                shell=True,
-            )
+    uuids_df = pd.read_csv(uuids_file, sep="\t")
+    uuids_df = uuids_df.dropna(subset=["uuid"])  # Ensure UUIDs are valid
+
+    files_base_directory = Path(f"{tissue}_files")
+    files_base_directory.mkdir(exist_ok=True)
+
+    find_processed_files(uuids_df, files_base_directory, data_directory)
 
 
 if __name__ == "__main__":
