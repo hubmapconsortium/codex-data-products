@@ -67,65 +67,55 @@ def get_input_directory(data_directory, uuid):
                     return consortium_subdir
                 
 
-def copy_file(file, target_directory):
+def copy_file(file, files_directory):
     check_call(
-        f"cp {fspath(file)} {target_directory}/{file.name}",
+        f"cp {fspath(file)} {files_directory}/{file.name}",
         shell=True,
     )
 
 
-def find_antibodies_file(input_directory, target_directory):
+def find_parent_file(input_directory, files_directory):
     antibodies_file = ab_tools.find_antibodies_meta(input_directory)
     if antibodies_file:
         print(f"Antibodies TSV: {antibodies_file}")
-        copy_file(antibodies_file, target_directory)
+        copy_file(antibodies_file, files_directory)
     else:
         print(f"No antibodies TSV found in {input_directory}")
 
 
-def process_uuid(row, files_base_directory, data_directory):
-    uuid = row["uuid"]
-    
-    # Create directory for each UUID
-    uuid_directory = files_base_directory / uuid
-    uuid_directory.mkdir(parents=True, exist_ok=True)
+def find_processed_files(uuids_df, files_base_directory, data_directory):
+    for _, row in uuids_df.iterrows():
+        uuid = row['uuid']
+        immediate_descendant_ids = row['immediate_descendant_ids']
 
-    # Find input directory and files
-    input_directory = get_input_directory(data_directory, uuid)
-    input_files = find_file_pairs(input_directory)
-    
-    # If no input files are found, skip this UUID
-    if input_files == (None, None, None, None, None):
-        print(f"No input files found in: {input_directory}")
-        return
-    
-    print(f"Input directory: {input_directory}")
-    print(f"Input files: {input_files}")
-    
-    # Copy the files to the UUID directory
-    for input_file in input_files:
-        if input_file:
-            copy_file(input_file, uuid_directory)
-    
-    # If there are any immediate descendant IDs, check for the antibodies TSV
-    if pd.notna(row["immediate_descendant_ids"]) and row["immediate_descendant_ids"] != '[]':
-        print(f"Immediate descendant IDs found for UUID {uuid}, looking for antibodies file.")
-        find_antibodies_file(input_directory, uuid_directory)
-    else:
-        print(f"No immediate descendant IDs for UUID {uuid}, skipping antibodies file search.")
+        files_directory = files_base_directory / uuid
+        files_directory.mkdir(parents=True, exist_ok=True)
+
+        input_directory = get_input_directory(data_directory, uuid)
+
+        if pd.notna(immediate_descendant_ids):  # If there are immediate descendants
+            print(f"Immediate descendants found for {uuid}. Looking for antibodies TSV.")
+            find_parent_file(input_directory, files_directory)
+        else:
+            print(f"No immediate descendants for {uuid}. Looking for processed files.")
+            input_files = find_file_pairs(input_directory)
+            if input_files == (None, None, None, None, None):
+                print("No input files in: ", input_directory)
+                continue
+            print("Input directory:", input_directory)
+            print("Input files:", input_files)
+            for input_file in input_files:
+                copy_file(input_file, files_directory)
 
 
 def main(data_directory: Path, uuids_file: Path, tissue: str):
-    # Read the UUIDs from the input TSV
     uuids_df = pd.read_csv(uuids_file, sep="\t")
-    
-    # Create base directory for the tissue-specific files
+    uuids_df = uuids_df.dropna(subset=["uuid"])  # Ensure UUIDs are valid
+
     files_base_directory = Path(f"{tissue}_files")
     files_base_directory.mkdir(exist_ok=True)
 
-    # Process each row (UUID) in the TSV
-    for _, row in uuids_df.iterrows():
-        process_uuid(row, files_base_directory, data_directory)
+    find_processed_files(uuids_df, files_base_directory, data_directory)
 
 
 if __name__ == "__main__":
