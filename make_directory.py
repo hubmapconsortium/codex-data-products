@@ -94,10 +94,8 @@ def find_processed_files(uuids_df, files_base_directory, data_directory):
         input_directory = get_input_directory(data_directory, uuid)
 
         if pd.notna(immediate_descendant_ids):  # If there are immediate descendants
-            print(f"Immediate descendants found for {uuid}. Looking for antibodies TSV.")
             find_parent_file(input_directory, files_directory)
         else:
-            print(f"No immediate descendants for {uuid}. Looking for processed files.")
             input_files = find_file_pairs(input_directory)
             if input_files == (None, None, None, None, None):
                 print("No input files in: ", input_directory)
