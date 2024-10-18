@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import json
-from antibodies_tsv_util import utils as ab_tools
+from antibodies_tsv_util import find_antibodies_meta
 from argparse import ArgumentParser
 from os import fspath, walk
 from pathlib import Path
@@ -75,7 +75,7 @@ def copy_file(file, files_directory):
 
 
 def find_parent_file(input_directory, files_directory):
-    antibodies_file = ab_tools.find_antibodies_meta(input_directory)
+    antibodies_file = find_antibodies_meta(input_directory)
     if antibodies_file:
         print(f"Antibodies TSV: {antibodies_file}")
         copy_file(antibodies_file, files_directory)
