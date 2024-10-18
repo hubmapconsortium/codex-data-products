@@ -63,7 +63,7 @@ def get_uuids(organ_name_mapping: dict, organ: str = None):
     # Handle other error responses
     else:
         print(f"Error {response.status_code}: {response.text}")
-        return [], [], []
+        return [], [], [], [], []
 
 
 def process_response(response):
@@ -76,18 +76,20 @@ def process_response(response):
     uuids = []
     hubmap_ids = []
     donor_metadata_list = []
-
+    immediate_ancestor_uuids = []
+    immediate_descendant_uuids = []
     # Loop through each dataset (hit) and extract the relevant information
     for hit in hits:
         source = hit["_source"]
         uuids.append(source["uuid"])
         hubmap_ids.append(source["hubmap_id"])
-        
+        immediate_ancestor_uuids.append(source["immediate_ancestor_ids"]) 
+        immediate_descendant_uuids.append(source["immediate_descendant_ids"])
         # Attempt to extract donor metadata, if available
         donor_metadata = source.get("donor", {}).get("metadata", {})
         donor_metadata_list.append(extract_donor_metadata(donor_metadata))
 
-    return uuids, hubmap_ids, donor_metadata_list
+    return uuids, hubmap_ids, donor_metadata_list, immediate_ancestor_uuids, immediate_descendant_uuids
 
 
 def extract_donor_metadata(metadata):
@@ -153,10 +155,12 @@ def main(tissue_type: str):
     if tissue_type not in organ_dict.values():
         print(f"Tissue {tissue_type} not found ")
         tissue_type = None
-    uuids_list, hubmap_ids_list, donor_metadata = get_uuids(organ_dict, tissue_type)
+    uuids_list, hubmap_ids_list, donor_metadata, ancestor_uuids, descendant_uuids = get_uuids(organ_dict, tissue_type)
     uuids_df = pd.DataFrame()
     uuids_df["uuid"] = pd.Series(uuids_list, dtype=str)
     uuids_df["hubmap_id"] = pd.Series(hubmap_ids_list, dtype=str)
+    uuids_df["immediate_ancestor_ids"] = pd.Series(ancestor_uuids, dtype=str)
+    uuids_df["immediate_descendant_ids"] = pd.Series(descendant_uuids, dtype=str)
     donor_metadata_df = pd.DataFrame(donor_metadata)
     result_df = pd.concat([uuids_df, donor_metadata_df], axis=1)
     key_for_tissue = [key for key, value in organ_dict.items() if value == tissue_type]
