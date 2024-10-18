@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import json
-from antibodies_tsv_util import find_antibodies_meta
+from antibodies_tsv_util.utils import find_antibodies_meta
 from argparse import ArgumentParser
 from os import fspath, walk
 from pathlib import Path
