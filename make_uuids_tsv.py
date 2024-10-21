@@ -83,7 +83,7 @@ def process_response(response):
         source = hit["_source"]
         uuids.append(source["uuid"])
         hubmap_ids.append(source["hubmap_id"])
-        immediate_ancestor_uuids.append(source["immediate_ancestor_ids"]) 
+        immediate_ancestor_uuids.append(source["immediate_ancestor_ids"][0] if source["immediate_ancestor_ids"] else None) 
         immediate_descendant = source.get("immediate_descendant_ids", [])
         immediate_descendant_uuids.append(None if not immediate_descendant else immediate_descendant)
         # Attempt to extract donor metadata, if available
