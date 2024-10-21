@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 antibodies_dict = {
     "BCL-2": "BCL2",
-    "Collagen IV": ["CollIV", "CollagenIV", "collagen IV"],
+    "Collagen IV": ["CollIV", "CollagenIV", "collagen IV", "COLIV"],
     "Cytokeratin": "cytokeratin",
     "eCAD": ["E-CAD", "ECAD"],
     "HLA-DR": "HLADR",
@@ -35,7 +35,7 @@ antibodies_dict = {
     "aDefensin 5": ["aDef5", "aDefensin5"],
     "MUC-1/EMA": "MUC1",
     "NKG2D (CD314)": ["NKG2D", "NKG2G"],
-    "a-SMA": ["SMActin", "aSMA"],
+    "a-SMA": ["SMActin", "aSMA", "SMA"],
     "MUC-2": "MUC2",
     "Foxp3": "FoxP3",
     }
@@ -59,11 +59,23 @@ def find_antibodies_meta(input_dir: Path) -> Optional[Path]:
         return None
 
 
+def get_analyte_name(antibody_name: str) -> str:
+    """
+    Strips unnecessary prefixes and suffixes off of antibody name from antibodies.tsv.
+    """
+    antb = re.sub(r"Anti-", "", antibody_name)
+    antb = re.sub(r"\s+antibody", "", antb)
+    antb = re.sub(r"antibody", "", antb)
+
+    return antb
+
+
 def find_antibody_key(value):
+    value_lower = value.strip().lower()
     for key, val in antibodies_dict.items():
-        if isinstance(val, str) and val == value:
+        if isinstance(val, str) and val.strip().lower() == value_lower:
             return key
-        elif isinstance(val, list) and value in val:
+        elif isinstance(val, list) and value_lower in [v.strip().lower() for v in val]:
             return key
     return value
 
@@ -162,7 +174,11 @@ def create_anndata(hdf5_store: Path, tissue_type: str, uuids_df: pd.DataFrame, c
     antibodies_tsv = find_antibodies_meta(raw_dir)
     if antibodies_tsv:
         antibodies_df = pd.read_csv(antibodies_tsv, sep="\t", dtype=str)
-        print(antibodies_df)
+        for idx, row in antibodies_df.iterrows():
+            stripped_name = get_analyte_name(antibodies_df.at[idx, "antibody_name"])
+            new_name = find_antibody_key(stripped_name)
+            antibodies_df.at[idx, "antibody_name"] = new_name
+        print(antibodies_df['antibody_name'])
     tissue_type = tissue_type if tissue_type else get_tissue_type(data_set_dir)
     store = pd.HDFStore(hdf5_store, 'r')
     key1 = '/total/channel/cell/expressions.ome.tiff/stitched/reg1'
