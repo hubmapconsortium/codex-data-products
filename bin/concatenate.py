@@ -7,15 +7,20 @@ from os import fspath, walk, listdir
 from pathlib import Path
 from scipy.io import mmread
 from scipy.sparse import block_diag
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List, Optional
 
 import anndata
+import logging
 import numpy as np
 import os
 import pandas as pd
+import re
 import requests
 import uuid
 import yaml
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)-7s - %(message)s")
+logger = logging.getLogger(__name__)
 
 antibodies_dict = {
     "BCL-2": "BCL2",
@@ -29,11 +34,29 @@ antibodies_dict = {
     "Synaptophysin": ["Synapt", "Synapto"],
     "aDefensin 5": ["aDef5", "aDefensin5"],
     "MUC-1/EMA": "MUC1",
-    "NKG2D (CD314)": "NKG2D",
+    "NKG2D (CD314)": ["NKG2D", "NKG2G"],
     "a-SMA": ["SMActin", "aSMA"],
     "MUC-2": "MUC2",
     "Foxp3": "FoxP3",
     }
+
+
+def find_antibodies_meta(input_dir: Path) -> Optional[Path]:
+    """
+    Looks for metadata files matching the pattern for antibodies in the given UUID directory.
+    """
+    metadata_filename_pattern = re.compile(r".*antibodies\.tsv$")
+    found_files = []
+
+    for filename in listdir(input_dir):
+        if metadata_filename_pattern.match(filename):
+            found_files.append(Path(input_dir) / filename)
+
+    if found_files:
+        return found_files[0]  # Return the first matching file
+    else:
+        logger.warning(f"No antibody file found in {input_dir}")
+        return None
 
 
 def find_antibody_key(value):
@@ -132,8 +155,14 @@ def get_column_names(cell_count_file):
     return column_names_list
 
 
-def create_anndata(hdf5_store, tissue_type, uuids_df, cell_centers_file, cell_count_file):
+def create_anndata(hdf5_store: Path, tissue_type: str, uuids_df: pd.DataFrame, cell_centers_file: Path, cell_count_file: Path, data_directory: Path):
     data_set_dir = fspath(hdf5_store.parent.stem)
+    parent_uuid = uuids_df.loc[uuids_df['uuid'] == data_set_dir, "immediate_ancestor_ids"].item()
+    raw_dir = data_directory / parent_uuid
+    antibodies_tsv = find_antibodies_meta(raw_dir)
+    if antibodies_tsv:
+        antibodies_df = pd.read_csv(antibodies_tsv, sep="\t", dtype=str)
+        print(antibodies_df)
     tissue_type = tissue_type if tissue_type else get_tissue_type(data_set_dir)
     store = pd.HDFStore(hdf5_store, 'r')
     key1 = '/total/channel/cell/expressions.ome.tiff/stitched/reg1'
@@ -235,7 +264,7 @@ def main(data_dir, uuids_tsv, tissue):
     filtered_adjacency_matrices = []
     
     for hdf5_file, cell_centers_file, adjacency_file, label_file, cell_count_file in zip(hdf5_files_list, cell_centers_files_list, adjacency_matrix_files_list, adjacency_matrix_labels_files_list, cell_count_files_list):
-        adata = create_anndata(hdf5_file, tissue, uuids_df, cell_centers_file, cell_count_file)
+        adata = create_anndata(hdf5_file, tissue, uuids_df, cell_centers_file, cell_count_file, data_dir)
         adatas.append(adata)
         
         # Load and filter the corresponding adjacency matrix
