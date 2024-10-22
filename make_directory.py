@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import json
-from antibodies_tsv_util import find_antibodies_meta
 from argparse import ArgumentParser
 from os import fspath, walk
 from pathlib import Path
 from subprocess import check_call
 
 import pandas as pd
+from antibodies_tsv_util import find_antibodies_meta
 
 
 def find_files(directory, patterns):
@@ -21,36 +21,38 @@ def find_files(directory, patterns):
 
 def find_file_pairs(directory):
     hdf5_pattern = ["out.hdf5"]
-    
+
     cell_count_pattern = [
-        "reg1_stitched_expressions.ome.tiff-cell_channel_total.csv", 
-        "reg001_expr.ome.tiff-cell_channel_total.csv"
+        "reg1_stitched_expressions.ome.tiff-cell_channel_total.csv",
+        "reg001_expr.ome.tiff-cell_channel_total.csv",
     ]
     adjacency_matrix_pattern = [
-        "reg1_stitched_expressions.ome.tiff_AdjacencyMatrix.mtx", 
-        "reg001_expr.ome.tiff_AdjacencyMatrix.mtx"
+        "reg1_stitched_expressions.ome.tiff_AdjacencyMatrix.mtx",
+        "reg001_expr.ome.tiff_AdjacencyMatrix.mtx",
     ]
     adjacency_matrix_labels_pattern = [
-        "reg1_stitched_expressions.ome.tiff_AdjacencyMatrixRowColLabels.txt", 
-        "reg001_expr.ome.tiff_AdjacencyMatrixRowColLabels.txt"
+        "reg1_stitched_expressions.ome.tiff_AdjacencyMatrixRowColLabels.txt",
+        "reg001_expr.ome.tiff_AdjacencyMatrixRowColLabels.txt",
     ]
     cell_centers_pattern = [
-        "reg1_stitched_expressions.ome.tiff-cell_centers.csv", 
-        "reg001_expr.ome.tiff-cell_centers.csv"
+        "reg1_stitched_expressions.ome.tiff-cell_centers.csv",
+        "reg001_expr.ome.tiff-cell_centers.csv",
     ]
 
     hdf5_file = find_files(directory, hdf5_pattern)
     cell_count_file = find_files(directory, cell_count_pattern)
     adjacency_matrix_file = find_files(directory, adjacency_matrix_pattern)
-    adjacency_matrix_labels_file = find_files(directory, adjacency_matrix_labels_pattern)
+    adjacency_matrix_labels_file = find_files(
+        directory, adjacency_matrix_labels_pattern
+    )
     cell_centers_file = find_files(directory, cell_centers_pattern)
-    
+
     return (
-        hdf5_file, 
-        cell_count_file, 
-        adjacency_matrix_file, 
-        adjacency_matrix_labels_file, 
-        cell_centers_file
+        hdf5_file,
+        cell_count_file,
+        adjacency_matrix_file,
+        adjacency_matrix_labels_file,
+        cell_centers_file,
     )
 
 
@@ -65,7 +67,7 @@ def get_input_directory(data_directory, uuid):
                 consortium_subdir = subdir / uuid
                 if consortium_subdir.exists():
                     return consortium_subdir
-                
+
 
 def copy_file(file, files_directory):
     check_call(
@@ -85,8 +87,8 @@ def find_parent_file(input_directory, files_directory):
 
 def find_processed_files(uuids_df, files_base_directory, data_directory):
     for _, row in uuids_df.iterrows():
-        uuid = row['uuid']
-        immediate_descendant_ids = row['immediate_descendant_ids']
+        uuid = row["uuid"]
+        immediate_descendant_ids = row["immediate_descendant_ids"]
 
         files_directory = files_base_directory / uuid
         files_directory.mkdir(parents=True, exist_ok=True)

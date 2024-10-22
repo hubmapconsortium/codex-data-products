@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
-from pathlib import Path
 import json
 import os
+from argparse import ArgumentParser
+from pathlib import Path
 
 
 def set_access_keys(access_key_id, secret_access_key):
-    os.system(f"aws configure set aws_access_key_id \"{access_key_id}\"")
-    os.system(f"aws configure set aws_secret_access_key \"{secret_access_key}\"")
+    os.system(f'aws configure set aws_access_key_id "{access_key_id}"')
+    os.system(f'aws configure set aws_secret_access_key "{secret_access_key}"')
 
 
 def upload_file_to_s3(local_file, uuid):
     bucket_path = f"s3://hubmap-data-products/{uuid}/"
     file_size = os.path.getsize(local_file)
-    os.system(f"aws s3 cp \"{local_file}\" \"{bucket_path}{local_file.name}\" --expected-size \"{file_size}\"")
+    os.system(
+        f'aws s3 cp "{local_file}" "{bucket_path}{local_file.name}" --expected-size "{file_size}"'
+    )
 
 
 def upload_files_to_s3(file_list, uuid):
@@ -45,6 +47,6 @@ if __name__ == "__main__":
     p.add_argument("metadata_json", type=Path)
     p.add_argument("access_key_id", type=str)
     p.add_argument("secret_access_key", type=str)
-    args= p.parse_args()
+    args = p.parse_args()
 
     main(args.h5ad_file, args.metadata_json, args.access_key_id, args.secret_access_key)
