@@ -397,7 +397,7 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     combined_adjacency_matrix = create_block_diag_adjacency_matrices(
         filtered_adjacency_matrices
     )
-    print(combined_adata.var_keys())
+    print(combined_adata.var.index)
     print(varms_dict)
     combined_adata.obsp["adjacency_matrix"] = combined_adjacency_matrix
     combined_adata.varm["RRID"] = varms_dict["RRID"]
