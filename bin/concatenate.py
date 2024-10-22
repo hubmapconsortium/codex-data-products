@@ -211,10 +211,6 @@ def create_varm_dfs(
         antibodies_tsv_id_df.iloc[protein_idx, 0] = matching_antibodies.loc[
             matching_antibodies["antibody_name"] == antibody, "channel_id"
         ].values[0]
-    print(uniprot_df)
-    print(rrid_df)
-    print(antibodies_tsv_id_df)
-    print(var_antb_tsv_intersection)
     return uniprot_df, rrid_df, antibodies_tsv_id_df
 
 
@@ -401,6 +397,8 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     combined_adjacency_matrix = create_block_diag_adjacency_matrices(
         filtered_adjacency_matrices
     )
+    print(combined_adata.var_keys())
+    print(varms_dict)
     combined_adata.obsp["adjacency_matrix"] = combined_adjacency_matrix
     combined_adata.varm["RRID"] = varms_dict["RRID"]
     combined_adata.varm["Uniprot_ID"] = varms_dict["Uniprot_ID"]
