@@ -279,7 +279,7 @@ def create_anndata(
             adata, data_set_dir, antibodies_df, var_antb_tsv_intersection
         )
         # Store these DataFrames in .varm with the dataset UUID as columns
-        adata.varm["Uniprot_ID"] = uniprot_df
+        adata.varm["UniprotID"] = uniprot_df
         adata.varm["RRID"] = rrid_df
         adata.varm["AntibodiesTsvID"] = antb_tsv_id_df
 
@@ -403,8 +403,8 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     for key in varms_dict:
         varms_dict[key] = varms_dict[key].reindex(combined_adata.var.index, fill_value=np.nan)
     combined_adata.varm["RRID"] = varms_dict["RRID"]
-    combined_adata.varm["Uniprot_ID"] = varms_dict["Uniprot_ID"]
-    combined_adata.varm["Antibodies_Tsv_ID"] = varms_dict["Antibodies_Tsv_ID"]
+    combined_adata.varm["UniprotID"] = varms_dict["UniprotID"]
+    combined_adata.varm["AntibodiesTsvID"] = varms_dict["AntibodiesTsvID"]
 
     # Add patient metadata to obs
     obs_w_patient_info = add_patient_metadata(combined_adata.obs, uuids_df)
