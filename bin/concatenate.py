@@ -237,6 +237,8 @@ def create_anndata(
     key1 = "/total/channel/cell/expressions.ome.tiff/stitched/reg1"
     key2 = "/total/channel/cell/expr.ome.tiff/reg001"
     var_names = get_column_names(cell_count_file)
+    # Replace column names with antibody names using the dictionary
+    var_names = [find_antibody_key(var) for var in var_names]    
     if antibodies_tsv:
         antibodies_df = pd.read_csv(antibodies_tsv, sep="\t", dtype=str)
         antibodies_df = standardize_antb_df(antibodies_df)
@@ -254,9 +256,6 @@ def create_anndata(
         matrix = store[key2]
         mean_layer_matrix = store["/meanAll/channel/cell/expr.ome.tiff/reg001"]
     store.close()
-
-    # Replace column names with antibody names using the dictionary
-    var_names = [find_antibody_key(var) for var in var_names]
 
     adata = anndata.AnnData(X=matrix, dtype=np.float64)
     adata.var_names = var_names
@@ -363,6 +362,7 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     # Create the AnnData objects and process adjacency matrices
     adatas = []
     filtered_adjacency_matrices = []
+    varms_dict = {}
 
     for (
         hdf5_file,
@@ -381,12 +381,20 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
             hdf5_file, tissue, uuids_df, cell_centers_file, cell_count_file, data_dir
         )
         adatas.append(adata)
+        # Save the values in .varm
+        if adata.varm:
+            for key in adata.varm.keys():
+                if key not in varms_dict:
+                    varms_dict[key] = []
+                varms_dict[key].append(adata.varm[key])
 
         # Load and filter the corresponding adjacency matrix
         filtered_matrix = load_adjacency_matrix_and_labels(
             adjacency_file, label_file, adata
         )
         filtered_adjacency_matrices.append(filtered_matrix)
+    for key in varms_dict:
+        varms_dict[key] = pd.concat(varms_dict[key], axis=1)
 
     # Concatenate all AnnData objects into one
     combined_adata = anndata.concat(adatas, join="outer")
@@ -394,6 +402,9 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
         filtered_adjacency_matrices
     )
     combined_adata.obsp["adjacency_matrix"] = combined_adjacency_matrix
+    combined_adata.varm["RRID"] = varms_dict["RRID"]
+    combined_adata.varm["Uniprot_ID"] = varms_dict["Uniprot_ID"]
+    combined_adata.varm["Antibodies_Tsv_ID"] = varms_dict["Antibodies_Tsv_ID"]
 
     # Add patient metadata to obs
     obs_w_patient_info = add_patient_metadata(combined_adata.obs, uuids_df)
