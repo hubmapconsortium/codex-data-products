@@ -232,9 +232,12 @@ def create_anndata(
     store = pd.HDFStore(hdf5_store, "r")
     key1 = "/total/channel/cell/expressions.ome.tiff/stitched/reg1"
     key2 = "/total/channel/cell/expr.ome.tiff/reg001"
+
+    # Get channel names
     var_names = get_column_names(cell_count_file)
-    # Replace column names with antibody names using the dictionary
-    var_names = [find_antibody_key(var) for var in var_names]    
+    # Replace var names with antibody names using the dictionary
+    var_names = [find_antibody_key(var) for var in var_names]
+
     if antibodies_tsv:
         antibodies_df = pd.read_csv(antibodies_tsv, sep="\t", dtype=str)
         antibodies_df = standardize_antb_df(antibodies_df)
@@ -256,7 +259,7 @@ def create_anndata(
     adata = anndata.AnnData(X=matrix, dtype=np.float64)
     adata.var_names = var_names
     adata.obs["ID"] = adata.obs.index
-    adata.obs["dataset"] = data_set_dir
+    adata.obs["dataset"] = str(data_set_dir)
 
     # Set index for cell IDs
     cell_ids_list = ["-".join([data_set_dir, cell_id]) for cell_id in adata.obs["ID"]]
@@ -279,7 +282,7 @@ def create_anndata(
             adata, data_set_dir, antibodies_df, var_antb_tsv_intersection
         )
         # Store these DataFrames in .varm with the dataset UUID as columns
-        adata.varm["Uniprot_ID"] = uniprot_df
+        adata.varm["UniprotID"] = uniprot_df
         adata.varm["RRID"] = rrid_df
         adata.varm["AntibodiesTsvID"] = antb_tsv_id_df
 
@@ -391,6 +394,7 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
         filtered_adjacency_matrices.append(filtered_matrix)
     for key in varms_dict:
         varms_dict[key] = pd.concat(varms_dict[key], axis=1)
+        varms_dict[key] = varms_dict[key].applymap(str)
 
     # Concatenate all AnnData objects into one
     combined_adata = anndata.concat(adatas, join="outer")
@@ -402,9 +406,10 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     # Make sure the var index matches the varm indices and add to concatenated adata 
     for key in varms_dict:
         varms_dict[key] = varms_dict[key].reindex(combined_adata.var.index, fill_value=np.nan)
+
     combined_adata.varm["RRID"] = varms_dict["RRID"]
-    combined_adata.varm["Uniprot_ID"] = varms_dict["Uniprot_ID"]
-    combined_adata.varm["Antibodies_Tsv_ID"] = varms_dict["Antibodies_Tsv_ID"]
+    combined_adata.varm["UniprotID"] = varms_dict["UniprotID"]
+    combined_adata.varm["AntibodiesTsvID"] = varms_dict["AntibodiesTsvID"]
 
     # Add patient metadata to obs
     obs_w_patient_info = add_patient_metadata(combined_adata.obs, uuids_df)
@@ -417,6 +422,16 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     combined_adata.uns["creation_data_time"] = creation_time
     combined_adata.uns["datasets"] = hbmids_list
     combined_adata.uns["uuid"] = data_product_uuid
+    for key in combined_adata.varm.keys():
+        combined_adata.varm[key] = combined_adata.varm[key].astype(str)
+
+    # Filter unidentifiable channels
+    pattern = r"^Channel:\d+:\d+$"
+    filtered_var_index = combined_adata.var.index[
+    ~combined_adata.var.index.str.match(pattern) & ~combined_adata.var.index.str.contains("blank", case=False)
+    ]
+    combined_adata = combined_adata[:, filtered_var_index].copy()
+    
     combined_adata.write(raw_output_file_name)
 
     # Save data product metadata
