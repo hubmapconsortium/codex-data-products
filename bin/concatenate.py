@@ -391,6 +391,7 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
         filtered_adjacency_matrices.append(filtered_matrix)
     for key in varms_dict:
         varms_dict[key] = pd.concat(varms_dict[key], axis=1)
+        varms_dict[key] = varms_dict[key].applymap(str)
 
     # Concatenate all AnnData objects into one
     combined_adata = anndata.concat(adatas, join="outer")
@@ -402,6 +403,7 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     # Make sure the var index matches the varm indices and add to concatenated adata 
     for key in varms_dict:
         varms_dict[key] = varms_dict[key].reindex(combined_adata.var.index, fill_value=np.nan)
+
     combined_adata.varm["RRID"] = varms_dict["RRID"]
     combined_adata.varm["UniprotID"] = varms_dict["UniprotID"]
     combined_adata.varm["AntibodiesTsvID"] = varms_dict["AntibodiesTsvID"]
