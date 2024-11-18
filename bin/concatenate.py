@@ -158,7 +158,7 @@ def create_json(
         "Data Product UUID": data_product_uuid,
         "Tissue": convert_tissue_code(tissue),
         "Assay": "CODEX",
-        "Raw URL": bucket_url + f"{tissue}.h5mu",
+        "Raw URL": bucket_url + f"{tissue}.h5ad",
         "Creation Time": creation_time,
         "Dataset UUIDs": uuids,
         "Dataset HBMIDs": hbmids,
@@ -260,6 +260,7 @@ def create_anndata(
     adata.var_names = var_names
     adata.obs["ID"] = adata.obs.index
     adata.obs["dataset"] = str(data_set_dir)
+    adata.obs["tissue"] = tissue_type
 
     # Set index for cell IDs
     cell_ids_list = ["-".join([data_set_dir, cell_id]) for cell_id in adata.obs["ID"]]
