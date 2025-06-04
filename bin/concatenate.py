@@ -296,7 +296,7 @@ def add_patient_metadata(obs, uuids_df):
     merged = merged.drop(columns=["Unnamed: 0"])
     merged = merged.fillna(np.nan)
     merged["age"] = pd.to_numeric(merged["age"])
-    obs = obs.loc[:, ~obs.columns.str.contains('^Unnamed')]
+    obs = obs.loc[:, ~obs.columns.str.contains("^Unnamed")]
     return merged
 
 
@@ -401,9 +401,11 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     )
     combined_adata.obsp["adjacency_matrix"] = combined_adjacency_matrix
 
-    # Make sure the var index matches the varm indices and add to concatenated adata 
+    # Make sure the var index matches the varm indices and add to concatenated adata
     for key in varms_dict:
-        varms_dict[key] = varms_dict[key].reindex(combined_adata.var.index, fill_value=np.nan)
+        varms_dict[key] = varms_dict[key].reindex(
+            combined_adata.var.index, fill_value=np.nan
+        )
 
     combined_adata.varm["RRID"] = varms_dict["RRID"]
     combined_adata.varm["UniprotID"] = varms_dict["UniprotID"]
@@ -426,10 +428,11 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     # Filter unidentifiable channels
     pattern = r"^Channel:\d+:\d+$"
     filtered_var_index = combined_adata.var.index[
-    ~combined_adata.var.index.str.match(pattern) & ~combined_adata.var.index.str.contains("blank", case=False)
+        ~combined_adata.var.index.str.match(pattern)
+        & ~combined_adata.var.index.str.contains("blank", case=False)
     ]
     combined_adata = combined_adata[:, filtered_var_index].copy()
-    
+
     combined_adata.write(raw_output_file_name)
 
     # Save data product metadata
