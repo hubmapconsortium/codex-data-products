@@ -49,7 +49,7 @@ steps:
     - id: upload
       in: 
         - id: h5mu_file
-          source: concatenate/h5ad_file
+          source: concatenate/h5mu_file
         - id: metadata_json
           source: concatenate/metadata_json
 
