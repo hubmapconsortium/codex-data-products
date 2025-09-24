@@ -19,14 +19,6 @@ inputs:
     tissue:
         label: "Two letter tissue type code"
         type: string?
-      
-    access_key_id:
-        label: "AWS access key id"
-        type: string
-    
-    secret_access_key:
-        label: "AWS secret access key"
-        type: string
 
 outputs:
     h5mu_file:
