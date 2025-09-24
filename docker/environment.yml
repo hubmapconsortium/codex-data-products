@@ -15,4 +15,4 @@ dependencies:
       - scanpy
       - zarr
       - muon
-      - tables
+      - pytables
