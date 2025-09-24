@@ -27,11 +27,11 @@ inputs:
             position: 2
 
 outputs:
-    h5ad_file:
+    h5mu_file:
         type: File
         outputBinding:
-            glob: "*.h5ad"
-        doc: h5ad file with concatenated codex datasets
+            glob: "*.h5mu"
+        doc: h5mu file with concatenated codex datasets
     
     metadata_json:
         type: File
