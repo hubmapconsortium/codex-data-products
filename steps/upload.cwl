@@ -20,18 +20,6 @@ inputs:
         inputBinding:
             position: 1
     
-    access_key_id:
-        type: string?
-        doc: AWS access key id
-        inputBinding:
-            position: 2
-    
-    secret_access_key:
-        type: string
-        doc: AWS secret access key
-        inputBinding:
-            position: 3
-
 outputs: 
     finished_text:
         type: File

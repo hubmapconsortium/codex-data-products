@@ -29,9 +29,9 @@ inputs:
         type: string
 
 outputs:
-    h5ad_file:
+    h5mu_file:
         type: File
-        outputSource: concatenate/h5ad_file
+        outputSource: concatenate/h5mu_file
     
     metadata_json:
         type: File
@@ -49,22 +49,18 @@ steps:
           source: tissue
     
       out:
-        - h5ad_file
+        - h5mu_file
         - metadata_json
       run: steps/concatenate.cwl
       label: "Concatenates out.hdf files in directory"
 
     - id: upload
       in: 
-        - id: h5ad_file
+        - id: h5mu_file
           source: concatenate/h5ad_file
         - id: metadata_json
           source: concatenate/metadata_json
-        - id: access_key_id
-          source: access_key_id
-        - id: secret_access_key
-          source: secret_access_key
-    
+
       out:
         - finished_text
       run: steps/upload.cwl
