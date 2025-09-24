@@ -82,11 +82,17 @@ def find_antibody_key(value: str) -> str:
 
 def get_tissue_type(dataset: str) -> str:
     organ_dict = yaml.load(open("/opt/organ_types.yaml"), Loader=yaml.BaseLoader)
-    organ_code = requests.get(
-        f"https://entity.api.hubmapconsortium.org/dataset/{dataset}/organs/"
-    )
-    organ_name = organ_dict[organ_code]
-    return organ_name.replace(" (Left)", "").replace(" (Right)", "")
+    url = f"https://entity.api.hubmapconsortium.org/datasets/{dataset}/samples"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        for sample in data:
+            direct_ancestor = sample.get("direct_ancestor", {})
+            organ = direct_ancestor.get("organ")
+            if organ:
+                organ_name = organ_dict[organ]
+                return organ_name["description"]
+    return None
 
 
 def convert_tissue_code(tissue_code: str) -> str:
@@ -153,12 +159,12 @@ def create_json(
     cell_count: int,
     file_size: int,
 ):
-    bucket_url = f"https://hubmap-data-products.s3.amazonaws.com/{data_product_uuid}/"
+    bucket_url = f"https://g-24f5cc.09193a.5898.dn.glob.us/public/hubmap-data-products/{data_product_uuid}"
     metadata = {
         "Data Product UUID": data_product_uuid,
         "Tissue": convert_tissue_code(tissue),
-        "Assay": "CODEX",
-        "Raw URL": bucket_url + f"{tissue}.h5ad",
+        "Assay": "codex",
+        "Raw URL": bucket_url + f"{tissue}.h5mu",
         "Creation Time": creation_time,
         "Dataset UUIDs": uuids,
         "Dataset HBMIDs": hbmids,
@@ -329,17 +335,22 @@ def create_block_diag_adjacency_matrices(adjacency_matrices):
     return block_diag_matrix.tocsr()
 
 
+def get_processed_uuids(df):
+    df = df[df["immediate_descendant_ids"] == np.nan]
+    print(df)
+    return df["uuid"].to_list(), df["hubmap_id"].to_list()
+
+
 def main(data_dir: Path, uuids_tsv: Path, tissue: str):
-    raw_output_file_name = f"{tissue}_raw.h5ad"
+    raw_output_file_name = f"{tissue}_raw.h5mu"
     uuids_df = pd.read_csv(uuids_tsv, sep="\t", dtype=str)
-    uuids_list = uuids_df["uuid"].to_list()
-    hbmids_list = uuids_df["hubmap_id"].to_list()
     hdf5_files_list = []
     cell_count_files_list = []
     adjacency_matrix_files_list = []
     adjacency_matrix_labels_files_list = []
     cell_centers_files_list = []
     directories = [data_dir / Path(uuid) for uuid in uuids_df["uuid"]]
+    processed_uuids, processed_hbmids = get_processed_uuids(uuids_df)
 
     for directory in directories:
         if len(listdir(directory)) > 1:
@@ -420,7 +431,7 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     data_product_uuid = str(uuid.uuid4())
     total_cell_count = combined_adata.obs.shape[0]
     combined_adata.uns["creation_data_time"] = creation_time
-    combined_adata.uns["datasets"] = hbmids_list
+    combined_adata.uns["datasets"] = processed_hbmids
     combined_adata.uns["uuid"] = data_product_uuid
     for key in combined_adata.varm.keys():
         combined_adata.varm[key] = combined_adata.varm[key].astype(str)
@@ -441,8 +452,8 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
         tissue,
         data_product_uuid,
         creation_time,
-        uuids_list,
-        hbmids_list,
+        processed_uuids,
+        processed_hbmids,
         total_cell_count,
         file_size,
     )

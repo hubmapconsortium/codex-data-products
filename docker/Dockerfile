@@ -1,10 +1,7 @@
-FROM ubuntu:20.04
+FROM continuumio/miniconda3:25.3.1-1
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-## System packages
-# I'm used to using `apt` but it complains that it doesn't have a stable
-#   command-line interface, so let's use `apt-get` instead
 RUN apt-get update \
  && apt-get -y install \
     autoconf \
@@ -13,7 +10,6 @@ RUN apt-get update \
     flex \
     git \
     libfreetype6-dev \
-    libigraph0-dev \
     libxml2-dev \
     libtool \
     m4 \
@@ -22,16 +18,22 @@ RUN apt-get update \
     python3-dev \
     python3-pip \
     zlib1g-dev \
-    awscli \
+    curl \
  && rm -rf /var/cache/apt/*
 
 ## Python packages
-COPY docker/requirements.txt /opt/requirements.txt
-RUN pip3 install -r /opt/requirements.txt \
- && rm -rf /root/.cache/pip
+COPY docker/python/environment.yml /opt/environment.yml
+RUN conda env create -f /opt/environment.yml
 
-COPY bin /opt
+ENV CONDA_ENV_NAME=codex-data-products
+ENV CONDA_PREFIX=/opt/conda/envs/${CONDA_ENV_NAME}
+ENV PATH=${CONDA_PREFIX}/bin:$PATH
 
-RUN chmod -R +x /opt
+
+COPY bin/ /opt
+COPY data /opt/data
 
 WORKDIR /opt
+RUN chmod -R +x /opt
+
+CMD ["/bin/bash"]
