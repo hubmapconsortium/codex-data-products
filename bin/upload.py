@@ -7,9 +7,9 @@ import os
 
 
 def copy_file_to_vm(local_file, uuid):
-    os.system(f'mkdir /hive/hubmap/data/public/cmu-organ-data-products/{uuid}')
+    os.system(f'mkdir /hive/hubmap/data/public/hubmap-data-products/{uuid}')
     os.system(
-        f'scp {local_file} /hive/hubmap/data/public/cmu-organ-data-products/{uuid}/{local_file.name}'
+        f'scp {local_file} /hive/hubmap/data/public/hubmap-data-products/{uuid}/{local_file.name}'
     )
 
 
