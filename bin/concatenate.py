@@ -282,7 +282,7 @@ def create_anndata(
 
     # Create the cell centers matrix and store it in .obsm
     adata.obsm["centers"] = cell_centers_df.loc[
-        cell_centers_df["ID"].astype(str).isin(adata.obs["ID"].astype(str)), ["x", "y"]
+        cell_centers_df["ID"].astype(str).isin(adata.obs["original_obs_id"].astype(str)), ["x", "y"]
     ].to_numpy()
 
     if antibodies_tsv and var_antb_tsv_intersection:
@@ -315,7 +315,7 @@ def load_adjacency_matrix_and_labels(
         label_file, header=None, names=["cell_id"], delim_whitespace=True
     )
 
-    adata_cell_ids = adata.obs["ID"].astype(int).to_list()
+    adata_cell_ids = adata.obs["original_obs_id"].astype(int).to_list()
     filtered_labels = labels[labels["cell_id"].isin(adata_cell_ids)]
     filtered_cell_ids = filtered_labels["cell_id"].values
 
