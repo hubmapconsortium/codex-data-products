@@ -337,7 +337,6 @@ def create_block_diag_adjacency_matrices(adjacency_matrices):
 
 
 def get_processed_uuids(df:pd.DataFrame):
-    print(df["immediate_descendant_ids"])
     df = df[df["immediate_descendant_ids"].isna()]
     return df["uuid"].to_list(), df["hubmap_id"].to_list()
 
@@ -352,8 +351,6 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     cell_centers_files_list = []
     directories = [data_dir / Path(uuid) for uuid in uuids_df["uuid"]]
     processed_uuids, processed_hbmids = get_processed_uuids(uuids_df)
-    print(processed_uuids)
-    print(processed_hbmids)
 
     for directory in directories:
         if len(listdir(directory)) > 1:
