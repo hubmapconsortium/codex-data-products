@@ -8,7 +8,7 @@ hints:
 baseCommand: /opt/upload.py
 
 inputs:
-    h5ad_file:
+    h5mu_file:
         type: File
         doc: The raw h5ad file
         inputBinding:
