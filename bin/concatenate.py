@@ -336,7 +336,7 @@ def create_block_diag_adjacency_matrices(adjacency_matrices):
 
 
 def get_processed_uuids(df):
-    print(df)
+    print(df.iloc[[1]])
     print(df["immediate_descendant_ids"])
     print(df[df["immediate_descendant_ids"] == "NaN"])
     df = df[df["immediate_descendant_ids"] == pd.NA]
