@@ -336,6 +336,7 @@ def create_block_diag_adjacency_matrices(adjacency_matrices):
 
 
 def get_processed_uuids(df):
+    print(df)
     df = df[df["immediate_descendant_ids"] == np.nan]
     print(df)
     return df["uuid"].to_list(), df["hubmap_id"].to_list()
