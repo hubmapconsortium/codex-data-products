@@ -46,15 +46,4 @@ steps:
       run: steps/concatenate.cwl
       label: "Concatenates out.hdf files in directory"
 
-    - id: upload
-      in: 
-        - id: h5mu_file
-          source: concatenate/h5mu_file
-        - id: metadata_json
-          source: concatenate/metadata_json
-
-      out:
-        - finished_text
-      run: steps/upload.cwl
-      label: "Uploads the pipeline outputs to s3"
       
