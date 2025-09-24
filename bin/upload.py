@@ -39,11 +39,8 @@ def main(
 
 if __name__ == "__main__":
     p = ArgumentParser()
-    p.add_argument("annotated_raw_h5ad_file", type=Path)
-    p.add_argument("processed_h5ad_file", type=Path)
-    p.add_argument("umap_png", type=Path)
+    p.add_argument("raw_h5mu", type=Path)
     p.add_argument("data_product_metadata", type=Path)
-    p.add_argument("zarr_file", type=str)
     args = p.parse_args()
 
     main(
