@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import anndata
+import mudata as md
 import numpy as np
 import pandas as pd
 import requests
@@ -264,12 +265,12 @@ def create_anndata(
 
     adata = anndata.AnnData(X=matrix, dtype=np.float64)
     adata.var_names = var_names
-    adata.obs["ID"] = adata.obs.index
+    adata.obs["original_obs_id"] = adata.obs.index
     adata.obs["dataset"] = str(data_set_dir)
     adata.obs["tissue"] = tissue_type
 
     # Set index for cell IDs
-    cell_ids_list = ["-".join([data_set_dir, cell_id]) for cell_id in adata.obs["ID"]]
+    cell_ids_list = ["-".join([data_set_dir, cell_id]) for cell_id in adata.obs["original_obs_id"]]
     adata.obs["cell_id"] = pd.Series(cell_ids_list, index=adata.obs.index, dtype=str)
     adata.obs.set_index("cell_id", drop=True, inplace=True)
 
@@ -444,9 +445,15 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
         ~combined_adata.var.index.str.match(pattern)
         & ~combined_adata.var.index.str.contains("blank", case=False)
     ]
-    combined_adata = combined_adata[:, filtered_var_index].copy()
 
-    combined_adata.write(raw_output_file_name)
+    # Epic specs
+    combined_adata = combined_adata[:, filtered_var_index].copy()
+    combined_adata.obs['object_type'] = 'ftu'
+    combined_adata.obs['analyte_class'] = 'Protein'
+    combined_adata.uns['protocol'] = 'https://github.com/hubmapconsortium/codex-data-products'
+    mdata = md.MuData({f"{data_product_uuid}_raw": combined_adata})
+    mdata.uns['epic_type'] = 'analyses'
+    mdata.write(raw_output_file_name)
 
     # Save data product metadata
     file_size = os.path.getsize(raw_output_file_name)
