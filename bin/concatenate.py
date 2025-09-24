@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import anndata
+import mudata as md
 import numpy as np
 import pandas as pd
 import requests
@@ -82,11 +83,17 @@ def find_antibody_key(value: str) -> str:
 
 def get_tissue_type(dataset: str) -> str:
     organ_dict = yaml.load(open("/opt/organ_types.yaml"), Loader=yaml.BaseLoader)
-    organ_code = requests.get(
-        f"https://entity.api.hubmapconsortium.org/dataset/{dataset}/organs/"
-    )
-    organ_name = organ_dict[organ_code]
-    return organ_name.replace(" (Left)", "").replace(" (Right)", "")
+    url = f"https://entity.api.hubmapconsortium.org/datasets/{dataset}/samples"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        for sample in data:
+            direct_ancestor = sample.get("direct_ancestor", {})
+            organ = direct_ancestor.get("organ")
+            if organ:
+                organ_name = organ_dict[organ]
+                return organ_name["description"]
+    return None
 
 
 def convert_tissue_code(tissue_code: str) -> str:
@@ -153,12 +160,12 @@ def create_json(
     cell_count: int,
     file_size: int,
 ):
-    bucket_url = f"https://hubmap-data-products.s3.amazonaws.com/{data_product_uuid}/"
+    bucket_url = f"https://g-24f5cc.09193a.5898.dn.glob.us/public/hubmap-data-products/{data_product_uuid}"
     metadata = {
         "Data Product UUID": data_product_uuid,
         "Tissue": convert_tissue_code(tissue),
-        "Assay": "CODEX",
-        "Raw URL": bucket_url + f"{tissue}.h5ad",
+        "Assay": "codex",
+        "Raw URL": bucket_url + f"{tissue}.h5mu",
         "Creation Time": creation_time,
         "Dataset UUIDs": uuids,
         "Dataset HBMIDs": hbmids,
@@ -258,12 +265,12 @@ def create_anndata(
 
     adata = anndata.AnnData(X=matrix, dtype=np.float64)
     adata.var_names = var_names
-    adata.obs["ID"] = adata.obs.index
+    adata.obs["original_obs_id"] = adata.obs.index
     adata.obs["dataset"] = str(data_set_dir)
     adata.obs["tissue"] = tissue_type
 
     # Set index for cell IDs
-    cell_ids_list = ["-".join([data_set_dir, cell_id]) for cell_id in adata.obs["ID"]]
+    cell_ids_list = ["-".join([data_set_dir, cell_id]) for cell_id in adata.obs["original_obs_id"]]
     adata.obs["cell_id"] = pd.Series(cell_ids_list, index=adata.obs.index, dtype=str)
     adata.obs.set_index("cell_id", drop=True, inplace=True)
 
@@ -275,7 +282,7 @@ def create_anndata(
 
     # Create the cell centers matrix and store it in .obsm
     adata.obsm["centers"] = cell_centers_df.loc[
-        cell_centers_df["ID"].astype(str).isin(adata.obs["ID"].astype(str)), ["x", "y"]
+        cell_centers_df["ID"].astype(str).isin(adata.obs["original_obs_id"].astype(str)), ["x", "y"]
     ].to_numpy()
 
     if antibodies_tsv and var_antb_tsv_intersection:
@@ -308,7 +315,7 @@ def load_adjacency_matrix_and_labels(
         label_file, header=None, names=["cell_id"], delim_whitespace=True
     )
 
-    adata_cell_ids = adata.obs["ID"].astype(int).to_list()
+    adata_cell_ids = adata.obs["original_obs_id"].astype(int).to_list()
     filtered_labels = labels[labels["cell_id"].isin(adata_cell_ids)]
     filtered_cell_ids = filtered_labels["cell_id"].values
 
@@ -329,17 +336,24 @@ def create_block_diag_adjacency_matrices(adjacency_matrices):
     return block_diag_matrix.tocsr()
 
 
+def get_processed_uuids(df:pd.DataFrame):
+    print(df["immediate_descendant_ids"])
+    df = df[df["immediate_descendant_ids"].isna()]
+    return df["uuid"].to_list(), df["hubmap_id"].to_list()
+
+
 def main(data_dir: Path, uuids_tsv: Path, tissue: str):
-    raw_output_file_name = f"{tissue}_raw.h5ad"
+    raw_output_file_name = f"{tissue}_raw.h5mu"
     uuids_df = pd.read_csv(uuids_tsv, sep="\t", dtype=str)
-    uuids_list = uuids_df["uuid"].to_list()
-    hbmids_list = uuids_df["hubmap_id"].to_list()
     hdf5_files_list = []
     cell_count_files_list = []
     adjacency_matrix_files_list = []
     adjacency_matrix_labels_files_list = []
     cell_centers_files_list = []
     directories = [data_dir / Path(uuid) for uuid in uuids_df["uuid"]]
+    processed_uuids, processed_hbmids = get_processed_uuids(uuids_df)
+    print(processed_uuids)
+    print(processed_hbmids)
 
     for directory in directories:
         if len(listdir(directory)) > 1:
@@ -420,7 +434,7 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
     data_product_uuid = str(uuid.uuid4())
     total_cell_count = combined_adata.obs.shape[0]
     combined_adata.uns["creation_data_time"] = creation_time
-    combined_adata.uns["datasets"] = hbmids_list
+    combined_adata.uns["datasets"] = processed_hbmids
     combined_adata.uns["uuid"] = data_product_uuid
     for key in combined_adata.varm.keys():
         combined_adata.varm[key] = combined_adata.varm[key].astype(str)
@@ -431,9 +445,15 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
         ~combined_adata.var.index.str.match(pattern)
         & ~combined_adata.var.index.str.contains("blank", case=False)
     ]
-    combined_adata = combined_adata[:, filtered_var_index].copy()
 
-    combined_adata.write(raw_output_file_name)
+    # Epic specs
+    combined_adata = combined_adata[:, filtered_var_index].copy()
+    combined_adata.obs['object_type'] = 'ftu'
+    combined_adata.obs['analyte_class'] = 'Protein'
+    combined_adata.uns['protocol'] = 'https://github.com/hubmapconsortium/codex-data-products'
+    mdata = md.MuData({f"{data_product_uuid}_raw": combined_adata})
+    mdata.uns['epic_type'] = 'analyses'
+    mdata.write(raw_output_file_name)
 
     # Save data product metadata
     file_size = os.path.getsize(raw_output_file_name)
@@ -441,8 +461,8 @@ def main(data_dir: Path, uuids_tsv: Path, tissue: str):
         tissue,
         data_product_uuid,
         creation_time,
-        uuids_list,
-        hbmids_list,
+        processed_uuids,
+        processed_hbmids,
         total_cell_count,
         file_size,
     )
