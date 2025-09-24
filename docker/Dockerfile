@@ -31,7 +31,6 @@ ENV PATH=${CONDA_PREFIX}/bin:$PATH
 
 
 COPY bin/ /opt
-COPY data /opt/data
 
 WORKDIR /opt
 RUN chmod -R +x /opt
